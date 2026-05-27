@@ -71,6 +71,33 @@ def build_region_bar(df: pd.DataFrame) -> go.Figure:
     return fig
 
 
+def build_channel_bar(df: pd.DataFrame) -> go.Figure:
+    """Revenue by sales channel — horizontal bar chart."""
+    summary = (
+        df.groupby("channel")["revenue"]
+        .sum()
+        .reset_index()
+        .sort_values("revenue", ascending=True)
+    )
+    colors = ["#FF6B6B", "#4ECDC4", "#45B7D1"]
+    fig = go.Figure(go.Bar(
+        x=summary["revenue"],
+        y=summary["channel"],
+        orientation="h",
+        marker_color=colors[:len(summary)],
+        hovertemplate="<b>%{y}</b><br>Revenue: $%{x:,.0f}<extra></extra>",
+    ))
+    fig.update_layout(
+        title="Revenue by Channel",
+        plot_bgcolor="white",
+        xaxis=dict(tickprefix="$", tickformat=",.0f", title="Total Revenue ($)"),
+        yaxis=dict(title="Channel"),
+        showlegend=False,
+        margin=dict(t=50, b=30, l=80),
+    )
+    return fig
+
+
 def build_monthly_line(df: pd.DataFrame) -> go.Figure:
     """Monthly revenue trend — line chart."""
     monthly = (
@@ -142,6 +169,35 @@ def build_top_products(df: pd.DataFrame, n: int = 10) -> go.Figure:
     return fig
 
 
+def build_rep_leaderboard(df: pd.DataFrame, n: int = 5) -> go.Figure:
+    """Top N sales reps by revenue — horizontal bar chart."""
+    top = (
+        df.groupby("sales_rep")["revenue"]
+        .sum()
+        .nlargest(n)
+        .reset_index()
+        .sort_values("revenue")
+    )
+    fig = px.bar(
+        top, x="revenue", y="sales_rep",
+        orientation="h",
+        color="revenue",
+        color_continuous_scale="Viridis",
+        labels={"revenue": "Revenue ($)", "sales_rep": "Sales Rep"},
+        title=f"Top {n} Sales Reps by Revenue",
+    )
+    fig.update_layout(
+        coloraxis_showscale=False,
+        plot_bgcolor="white",
+        xaxis=dict(tickprefix="$", tickformat=",.0f"),
+        margin=dict(t=50, b=30)
+    )
+    fig.update_traces(
+        hovertemplate="<b>%{y}</b><br>Revenue: $%{x:,.0f}<extra></extra>"
+    )
+    return fig
+
+
 def kpi_card_html(label: str, value: str, color: str = "#2196F3") -> str:
     """Render a single KPI card as HTML."""
     return f"""
@@ -171,9 +227,11 @@ def build_html(df: pd.DataFrame) -> str:
             empty.update_layout(title="No data for this period")
             chart_data[q] = {
                 "region": empty.to_json(),
+                "channel": empty.to_json(),
                 "monthly": empty.to_json(),
                 "category": empty.to_json(),
                 "top_products": empty.to_json(),
+                "rep_leaderboard": empty.to_json(),
                 "total_revenue": "$0",
                 "total_orders": "0",
                 "avg_order": "$0",
@@ -191,9 +249,11 @@ def build_html(df: pd.DataFrame) -> str:
 
         chart_data[q] = {
             "region":       build_region_bar(subset).to_json(),
+            "channel":      build_channel_bar(subset).to_json(),
             "monthly":      build_monthly_line(subset).to_json(),
             "category":     build_category_pie(subset).to_json(),
             "top_products": build_top_products(subset).to_json(),
+            "rep_leaderboard": build_rep_leaderboard(subset).to_json(),
             "total_revenue": f"${total_rev:,.0f}",
             "total_orders":  f"{total_orders:,}",
             "avg_order":     f"${avg_order:,.0f}",
@@ -228,10 +288,11 @@ def build_html(df: pd.DataFrame) -> str:
     select:focus{{outline:none;border-color:#2196F3;}}
     .kpis{{display:flex;gap:16px;flex-wrap:wrap;padding:24px 32px 8px;}}
     .charts-grid{{display:grid;
-                  grid-template-columns:1fr 1fr;
+                  grid-template-columns:1fr 1fr 1fr;
                   gap:20px;padding:16px 32px 32px;}}
     .chart-card{{background:#fff;border-radius:10px;
                  padding:8px;box-shadow:0 2px 8px rgba(0,0,0,.06);}}
+    @media(max-width:1200px){{.charts-grid{{grid-template-columns:1fr 1fr;}}}}
     @media(max-width:800px){{.charts-grid{{grid-template-columns:1fr;}}}}
     footer{{text-align:center;padding:16px;font-size:12px;color:#999;
             border-top:1px solid #e0e6ed;background:#fff;}}
@@ -261,9 +322,11 @@ def build_html(df: pd.DataFrame) -> str:
 
 <div class="charts-grid">
   <div class="chart-card"><div id="chartRegion"  style="height:340px;"></div></div>
+  <div class="chart-card"><div id="chartChannel" style="height:340px;"></div></div>
   <div class="chart-card"><div id="chartMonthly" style="height:340px;"></div></div>
   <div class="chart-card"><div id="chartCategory"    style="height:340px;"></div></div>
   <div class="chart-card"><div id="chartTopProducts" style="height:340px;"></div></div>
+  <div class="chart-card"><div id="chartRepLeaderboard" style="height:340px;"></div></div>
 </div>
 
 <footer>
@@ -295,9 +358,11 @@ function applyFilter(quarter) {{
 
   // Charts
   Plotly.react("chartRegion",      JSON.parse(d.region).data,      JSON.parse(d.region).layout,      {{responsive:true}});
+  Plotly.react("chartChannel",     JSON.parse(d.channel).data,     JSON.parse(d.channel).layout,     {{responsive:true}});
   Plotly.react("chartMonthly",     JSON.parse(d.monthly).data,     JSON.parse(d.monthly).layout,     {{responsive:true}});
   Plotly.react("chartCategory",    JSON.parse(d.category).data,    JSON.parse(d.category).layout,    {{responsive:true}});
   Plotly.react("chartTopProducts", JSON.parse(d.top_products).data, JSON.parse(d.top_products).layout, {{responsive:true}});
+  Plotly.react("chartRepLeaderboard", JSON.parse(d.rep_leaderboard).data, JSON.parse(d.rep_leaderboard).layout, {{responsive:true}});
 
   document.getElementById("filterLabel").textContent =
     quarter === "Full Year" ? "Showing all 2024 data" : `Showing ${{quarter}} 2024 only`;

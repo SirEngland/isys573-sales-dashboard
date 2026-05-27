@@ -11,7 +11,8 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from dashboard import load_data, build_region_bar, build_monthly_line, \
-                      build_category_pie, build_top_products
+                      build_category_pie, build_top_products, build_channel_bar, \
+                      build_rep_leaderboard
 
 DATA_PATH = Path(__file__).parent.parent / "data" / "sales.csv"
 
@@ -56,16 +57,16 @@ class TestRegionChart:
         fig = build_region_bar(df)
         assert fig is not None
 
-    def test_has_four_bars(self, df):
+    def test_has_four_regions(self, df):
         fig = build_region_bar(df)
-        # px.bar with color creates one trace per region
-        assert len(fig.data) == 4
+        # go.Figure with single Bar trace containing all regions
+        assert len(fig.data[0].y) == 4
 
     def test_filtered_by_quarter(self, df):
         q1 = df[df["quarter"] == "Q1"]
         fig = build_region_bar(q1)
         # Should only show regions present in Q1
-        assert len(fig.data[0].x) <= 4
+        assert len(fig.data[0].y) <= 4
 
 
 class TestMonthlyChart:
@@ -109,3 +110,58 @@ class TestTopProducts:
         fig = build_top_products(df)
         revenues = list(fig.data[0].x)
         assert revenues == sorted(revenues)
+
+
+class TestChannelChart:
+    def test_returns_figure(self, df):
+        fig = build_channel_bar(df)
+        assert fig is not None
+
+    def test_three_channels(self, df):
+        fig = build_channel_bar(df)
+        assert len(fig.data[0].y) == 3
+
+    def test_channel_names_correct(self, df):
+        fig = build_channel_bar(df)
+        channels = set(fig.data[0].y)
+        expected = {"Online", "In-Store", "Wholesale"}
+        assert channels == expected
+
+    def test_revenue_values_are_positive(self, df):
+        fig = build_channel_bar(df)
+        assert all(v > 0 for v in fig.data[0].x)
+
+    def test_filtered_by_quarter(self, df):
+        q1 = df[df["quarter"] == "Q1"]
+        fig = build_channel_bar(q1)
+        # Should still have all channels even if filtering
+        assert len(fig.data[0].y) <= 3
+
+
+class TestRepLeaderboard:
+    def test_returns_figure(self, df):
+        fig = build_rep_leaderboard(df)
+        assert fig is not None
+
+    def test_default_top_5(self, df):
+        fig = build_rep_leaderboard(df)
+        assert len(fig.data[0].y) == 5
+
+    def test_custom_n(self, df):
+        fig = build_rep_leaderboard(df, n=3)
+        assert len(fig.data[0].y) == 3
+
+    def test_sorted_ascending_for_horizontal_bar(self, df):
+        fig = build_rep_leaderboard(df)
+        revenues = list(fig.data[0].x)
+        assert revenues == sorted(revenues)
+
+    def test_revenue_values_are_positive(self, df):
+        fig = build_rep_leaderboard(df)
+        assert all(v > 0 for v in fig.data[0].x)
+
+    def test_filtered_by_quarter(self, df):
+        q1 = df[df["quarter"] == "Q1"]
+        fig = build_rep_leaderboard(q1, n=3)
+        # Should only show top 3 for Q1
+        assert len(fig.data[0].y) <= 3
